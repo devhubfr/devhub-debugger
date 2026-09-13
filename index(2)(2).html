@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DevHub Debugger</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#070a11;color:#edf2ff;font-family:Arial,sans-serif}
+header{height:70px;padding:0 6%;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff14;background:#0a0e17}
+.logo{font-weight:900;font-size:22px}.logo b{color:#8290ff}.badge{font-size:12px;color:#aab4ce;border:1px solid #ffffff18;padding:8px 12px;border-radius:20px}
+main{width:min(1200px,92%);margin:45px auto}.hero{text-align:center;margin-bottom:28px}.hero h1{font-size:clamp(36px,6vw,62px);margin:0 0 10px}.hero h1 span{color:#8290ff}.hero p{color:#929db7}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:15px 0}.toolbar button,.toolbar select,.actions button{background:#111725;color:#eaf0ff;border:1px solid #ffffff18;padding:11px 14px;border-radius:10px;cursor:pointer}.primary{background:#7483ff!important;border-color:#7483ff!important;font-weight:bold}
+.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:18px}.panel{background:#0d121c;border:1px solid #ffffff12;border-radius:18px;overflow:hidden}.head{height:52px;padding:0 15px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #ffffff10;color:#aeb8d0;font-size:13px}
+textarea{width:100%;height:500px;resize:vertical;min-height:300px;background:#080c14;color:#dce5ff;border:0;outline:0;padding:18px;font:14px/1.65 Consolas,monospace}.actions{padding:12px;border-top:1px solid #ffffff10;display:flex;gap:9px}
+.results{padding:14px;min-height:500px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.stat{background:#111824;border:1px solid #ffffff0d;border-radius:12px;padding:13px}.stat b{font-size:20px}.stat small{display:block;color:#7f8aa4;margin-top:4px}
+.issue{padding:13px;margin-bottom:10px;border-radius:12px;background:#111722;border:1px solid #ffffff10;border-left:3px solid #ff667b}.issue.warn{border-left-color:#ffc45d}.issue.ok{border-left-color:#62e6a0}.issue p{color:#aab4cc;font-size:13px;line-height:1.5;margin:6px 0}.line{font:12px Consolas;color:#8290ff}
+.empty{height:430px;display:flex;align-items:center;justify-content:center;text-align:center;color:#77829c}.empty b{display:block;color:#c3cce0;margin-bottom:7px}footer{text-align:center;color:#606b83;font-size:12px;margin-top:25px}
+@media(max-width:850px){.grid{grid-template-columns:1fr}}
+</style></head><body>
+<header><div class="logo">DEV<b>HUB</b> <span style="color:#68738e">/ Debugger</span></div><div class="badge">100% local · aucune API</div></header>
+<main>
+<div class="hero"><h1>Debug ton code <span>instantanément.</span></h1><p>Colle ton code et détecte les problèmes directement dans ton navigateur.</p></div>
+<div class="toolbar"><select id="lang"><option value="js">JavaScript</option><option value="json">JSON</option><option value="html">HTML</option><option value="css">CSS</option></select><button id="sample">Charger un exemple</button><button id="clear">Effacer</button><button id="copy">Copier</button></div>
+<div class="grid">
+<section class="panel"><div class="head"><span id="file">script.js</span><span id="chars">0 caractères</span></div><textarea id="code" spellcheck="false" placeholder="// Colle ton code ici..."></textarea><div class="actions"><button class="primary" id="analyze">⚡ Analyser</button><button id="format">↔ Formater</button></div></section>
+<section class="panel"><div class="head"><span>Résultats</span><span id="status">En attente</span></div><div class="results" id="results"><div class="empty"><div><b>Aucune analyse</b>Les problèmes apparaîtront ici.</div></div></div></section>
+</div><footer>DevHub Debugger — aucune donnée envoyée à un serveur.</footer></main>
+<script>
+const code=document.querySelector("#code"),results=document.querySelector("#results"),lang=document.querySelector("#lang"),status=document.querySelector("#status"),chars=document.querySelector("#chars");
+const samples={js:`function greet(name) {
+  console.log("Bonjour " + name)
+  if (name {
+    return true
+  }
+  let message = "DevHub"
+}`,json:`{
+  "name": "DevHub",
+  "version": 1,
+  "features": ["debugger",]
+}`,html:`<div class="card">
+  <h1>DevHub</h1>
+  <p>Mon super outil
+</div>`,css:`.card {
+  color: white;
+  padding: 20px;
+  .title { font-size: 20px; }
+}`};
+function line(pos){return code.value.slice(0,pos).split("\n").length}
+function mk(t,d,l,w=false){return{t,d,l,w}}
+function js(s){let a=[],stack=[],pairs={")":"(","]":"[","}":"{"};for(let i=0;i<s.length;i++){let c=s[i];if("([{".includes(c))stack.push([c,line(i)]);else if(")]}".includes(c)){let x=stack.pop();if(!x||x[0]!=pairs[c])a.push(mk("Délimiteur incohérent","Ce symbole ne correspond pas à l’ouverture trouvée.",line(i)))}}stack.forEach(x=>a.push(mk("Délimiteur non fermé","Cette ouverture n’est pas refermée.",x[1])));s.split("\n").forEach((x,i)=>{if(/\b(if|for|while|switch)\s*\([^)]*$/.test(x))a.push(mk("Condition incomplète","La parenthèse fermante semble manquer.",i+1));if(/console\.log/.test(x)&&!/[)]\s*;?$/.test(x))a.push(mk("Appel suspect","Vérifie les parenthèses de console.log().",i+1,true));});return a}
+function json(s){try{JSON.parse(s);return[]}catch(e){return[mk("JSON invalide",e.message,1)]}}
+function html(s){let a=[],st=[],r=/<\/?([a-zA-Z][\w-]*)(?:\s[^>]*)?>/g,m;while(m=r.exec(s)){let tag=m[1].toLowerCase();if(m[0].startsWith("</")){let x=st.pop();if(!x||x[0]!=tag)a.push(mk("Balise incohérente","La balise fermante ne correspond pas.",line(m.index)))}else if(!["br","hr","img","input","meta","link"].includes(tag)&&!m[0].endsWith("/>"))st.push([tag,line(m.index)])}st.forEach(x=>a.push(mk("Balise non fermée","Cette balise semble ne pas être refermée.",x[1])));return a}
+function css(s){let o=(s.match(/{/g)||[]).length,c=(s.match(/}/g)||[]).length;return o==c?[]:[mk(o>c?"Accolade non fermée":"Accolade en trop",`Différence détectée : ${Math.abs(o-c)} accolade(s).`,1)]}
+function run(){let s=code.value.trim();if(!s){results.innerHTML='<div class="empty"><div><b>Code manquant</b>Colle du code avant l’analyse.</div></div>';return}let a=lang.value=="js"?js(s):lang.value=="json"?json(s):lang.value=="html"?html(s):css(s);status.textContent=a.length?a.length+" problème(s)":"OK ✓";results.innerHTML='<div class="stats"><div class="stat"><b>'+a.filter(x=>!x.w).length+'</b><small>Erreurs</small></div><div class="stat"><b>'+a.filter(x=>x.w).length+'</b><small>Avertissements</small></div><div class="stat"><b>'+s.split("\n").length+'</b><small>Lignes</small></div></div>'+(a.length?a.map(x=>`<div class="issue ${x.w?'warn':''}"><strong>${x.w?'⚠️':'✕'} ${x.t}</strong><p>${x.d}</p><div class="line">Ligne ${x.l}</div></div>`).join(""):'<div class="issue ok"><strong>✓ Aucun problème détecté</strong><p>Aucun problème évident n’a été trouvé par l’analyse locale.</p></div>')}
+code.oninput=()=>chars.textContent=code.value.length+" caractères";document.querySelector("#analyze").onclick=run;
+document.querySelector("#sample").onclick=()=>{code.value=samples[lang.value];code.dispatchEvent(new Event("input"));run()};
+document.querySelector("#clear").onclick=()=>{code.value="";code.dispatchEvent(new Event("input"));results.innerHTML='<div class="empty"><div><b>Aucune analyse</b>Les problèmes apparaîtront ici.</div></div>';status.textContent="En attente"};
+document.querySelector("#copy").onclick=async()=>{await navigator.clipboard.writeText(code.value);status.textContent="Copié ✓";setTimeout(()=>status.textContent="En attente",1200)};
+lang.onchange=()=>document.querySelector("#file").textContent={js:"script.js",json:"data.json",html:"index.html",css:"style.css"}[lang.value];
+document.querySelector("#format").onclick=()=>{try{if(lang.value=="json")code.value=JSON.stringify(JSON.parse(code.value),null,2);code.dispatchEvent(new Event("input"))}catch(e){status.textContent="Format impossible"}};
+</script></body></html>
